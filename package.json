@@ -1,0 +1,36 @@
+{
+    "name": "subreddit_stats",
+
+    "version": "0.0.1",
+    
+    "description": "A project to gather activity statistics over time of given subreddits and gather them into a sqlite database. ",
+
+    "keywwords": [
+        "reddit",
+        "subreddit", 
+        "analysis"
+    ],
+
+    "homepage": "https://github.com/stevarino/subreddit_stats",
+
+    "bugs": "https://github.com/stevarino/subreddit_stats/issues",
+
+    "license": "MIT",
+
+    "author": {
+        "name": "Stephen O'Connor",
+        "url": "https://github.com/stevarino"
+    },
+
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/stevarino/subreddit_stats.git"
+    },
+
+    "dependencies": {
+        "sqlite3" : ">=3.1.8"
+    },
+    "engines" : { 
+        "node" : ">=6.9.5"
+    }
+}
