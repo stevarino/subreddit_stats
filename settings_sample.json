@@ -1,5 +1,13 @@
 {
   "reddit": {
-    "secret": "from-reddit"
+    "client_id": "app-id",
+    "secret": "app-secret",
+    "username": "user-name",
+    "password": "user-password"
+  },
+  "app": {
+    "port": 10039,
+    "request_interval_ms": 1100,
+    "server_error_timeout_ms": 120000
   }
 }
