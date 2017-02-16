@@ -7,7 +7,8 @@ Utilizes a JSON Rest API that will be spun off as it's own project in the near f
 (Also my first node.js project...)
 
 ![Top Ten Subreddit Graph](doc/subreddit_top_ten.png)
-_Note: Subreddit names have been removed for anominity._
+
+_Note: Subreddit names have been intentionally removed for impartiality._
 
 ## Requirements
 
