@@ -1,0 +1,12 @@
+[Unit]
+Description=Subreddit Stats
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/.../subreddit_stats/systemd/start.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
