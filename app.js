@@ -30,6 +30,15 @@ var SUBSCRIPTION_TIMER;
 // rate limit is 60 req/min - 1100 is 95% of that rate.
 var SUBSCRIPTION_INTERVAL = 1100;
 
+// queue of subs to query.
+var SUB_LIST = [];
+var SUB_INDEX = -1;
+
+// subs that are skipped (blacklisted or inaccessable)
+// recording sub name here to avoid modifying sub_list 
+// while iterating. 
+var SKIPPED_SUBS = [];
+
 // http json control/monitoring api
 var API_ROUTES = [
   ['/', (req) => {
@@ -70,9 +79,7 @@ function startup() {
     DB.get(`SELECT value FROM settings WHERE key='version'`, (err, row)=> {
       C.log("Database version: ", row.value);
     });
-    DB.get(`SELECT count(*) as c FROM subs`, (err, row)=> {
-      C.log("Number of rows: ", row.c);
-    });
+    C.log("Number of rows: ", SUB_LIST.length);
 
     reddit_api.set_log(C.log);
     reddit_api.init({
@@ -104,13 +111,6 @@ function could_not_authenticate() {
 function scan_subreddits() {
   C.log('Beginning scan');
 
-  var select = `SELECT subs.id, subs.name, Max(sub_info.timestamp) as ts, 
-                    Count(sub_info.timestamp) as cnt
-                FROM subs LEFT JOIN sub_info ON sub_info.sub_id = subs.id 
-                WHERE subs.is_active = 1
-                GROUP BY subs.id, subs.name 
-                ORDER BY ts IS NOT NULL ASC, ts ASC, subs.id asc LIMIT 1;`;
-
   var fields = ['subscribers', 'accounts_active', 'public_traffic', 'created_utc', 
                 'quarantine', 'accounts_active_is_fuzzed'];
 
@@ -119,50 +119,58 @@ function scan_subreddits() {
                           VALUES (?, ?${Array(fields.length+1).join(', ?')});`);
   
   SUBSCRIPTION_TIMER = setInterval(() => {
-    DB.get(select, (err, row) => {
-      if (err) throw err;
-      try { // not happy about the scope of this, but it needs to be bulletproof.
-        reddit_api.get({'path': `/r/${row.name}/about`}, (err, response) => {
+    if (SUB_INDEX == -1) {
+      C.log('Database not ready. Waiting...');
+      return;
+    }
 
-          if (err) {
-            if (err === reddit_api.ERR_JSON_PARSE) {
-              var f = C.save_object(response);
-              C.log("ERROR [JSON]: Could not parse response. Data saved to ", f);
-            } else if (err === reddit_api.ERR_NOT_READY 
-                        || err === reddit_api.ERR_SERVER) {
-              // pass
-            } else {
-              C.log("ERROR [API]:", err);
-            }
-            return;
+    let row = SUB_LIST[SUB_INDEX];
+    SUB_INDEX = (SUB_INDEX + 1) % SUB_LIST.length;
+    
+    if (SKIPPED_SUBS.indexOf(row.name) > -1) {
+      return;
+    }
+
+    try { // not happy about the scope of this, but it needs to be bulletproof.
+      reddit_api.get({'path': `/r/${row.name}/about`}, (err, response) => {
+        if (err) {
+          if (err === reddit_api.ERR_JSON_PARSE) {
+            var f = C.save_object(response);
+            C.log("ERROR [JSON]: Could not parse response. Data saved to ", f);
+          } else if (err === reddit_api.ERR_NOT_READY 
+                      || err === reddit_api.ERR_SERVER) {
+            // pass
+          } else {
+            C.log("ERROR [API]:", err);
           }
+          return;
+        }
 
-          var values = [row.id, Date.now()];
+        var values = [row.id, Date.now()];
 
-          // banned subs
-          if ('error' in response.content && response.content.error == 404) {
-            C.log(`Sub ${row.name} returned 404, setting to inactive`);
-            DB.run(`UPDATE subs SET is_active = 0 WHERE id = ${row.id}`);
-            return;
+        // banned subs
+        if ('error' in response.content && response.content.error == 404) {
+          C.log(`Sub ${row.name} returned 404, setting to inactive`);
+          DB.run(`UPDATE subs SET is_active = 0 WHERE id = ${row.id}`);
+          SKIPPED_SUBS.push(row.name);
+          return;
+        }
+
+        for (var i in fields) {
+          try {
+            values.push(response.content.data[fields[i]]);
+          } catch (err) {
+            var filename = C.save_object(response);
+            throw new Error (
+              `Missing field ${fields[i]}. Object saved to ${filename}`);
           }
+        }
 
-          for (var i in fields) {
-            try {
-              values.push(response.content.data[fields[i]]);
-            } catch (err) {
-              var filename = C.save_object(response);
-              throw new Error (
-                `Missing field ${fields[i]}. Object saved to ${filename}`);
-            }
-          }
-
-          insert.run(values);
-        });
-      } catch(exc) {
-        C.log("ERROR [EXCEPTION]: ", exc)
-      }
-      
-    });
+        insert.run(values);
+      });
+    } catch(exc) {
+      C.log("ERROR [EXCEPTION]: ", exc)
+    }
   }, SUBSCRIPTION_INTERVAL);
 }
 
@@ -213,10 +221,12 @@ function sqlite_init() {
               .then(db_run_func(subreddit_info))
               .then(load_database)
               .then(update_database)
+              .then(load_subreddits)
               .then(resolve);
         } else {
           load_database()
               .then(update_database)
+              .then(load_subreddits)
               .then(resolve);
         }
       });
@@ -284,6 +294,23 @@ function update_database(build = 0) {
   }).catch(err => {
     reject(err);
   });
+}
+
+function load_subreddits() {
+  return new Promise((resolve, reject) => {
+    var select = `SELECT subs.id, subs.name, Max(sub_info.timestamp) as ts
+                FROM subs LEFT JOIN sub_info ON sub_info.sub_id = subs.id 
+                WHERE subs.is_active = 1
+                GROUP BY subs.id, subs.name 
+                ORDER BY ts IS NOT NULL ASC, ts ASC, subs.id asc;`;
+    DB.all(select, (err, rows) => {
+      if (err) reject("Unable to retrive subs list");
+      SUB_LIST = rows;
+      SUB_INDEX = 0;
+      resolve();
+    });
+    SUB_LIST
+  })
 }
 
 function db_update_add_last_call() {
