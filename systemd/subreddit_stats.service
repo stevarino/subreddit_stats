@@ -1,0 +1,22 @@
+# Installation for systemd supporting systems:
+#   - Place this in /etc/systemd/system (typical location - check the docs)
+#   - Double check paths to the node executable (must be absolute) as well 
+#     as the subreddit_stats directory (again - absolute).
+#   - Enable the service: 'sudo systemctl enable subreddit_stats.service'
+#   - Start the service: 'sudo systemctl start subreddit_stats.service'
+#   - Check the service: 'journalctl -f -n200 -u subreddit_stats.service'
+#   - Ctrl-C to return.
+
+[Unit]
+Description=Subreddit Stats
+After=network.target
+
+[Service]
+Type=simple
+User=%i
+ExecStart=/usr/local/bin/node /home/stevarino/projects/subreddit_stats/app.js
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+

@@ -14,6 +14,8 @@
 var readline = require('readline');
 var fs = require('fs');
 var sqlite3 = require('sqlite3').verbose();
+var path = require('path');
+
 var reddit_api = require('./lib/reddit_api');
 var http_api = require('./lib/json_mason/json_mason');
 
@@ -23,7 +25,7 @@ var C = require("./lib/common")
 const VERSION = '0.0.2';
 const BUILD = 2;
 
-var DB = new sqlite3.Database('db.sqlite3');
+var DB = new sqlite3.Database(path.join(__dirname, 'db.sqlite3'));
 
 // interval timer for reddit api
 var SUBSCRIPTION_TIMER;
@@ -33,7 +35,6 @@ var SUBSCRIPTION_INTERVAL = 1100;
 // queue of subs to query.
 var SUB_LIST = [];
 var SUB_INDEX = -1;
-
 // subs that are skipped (blacklisted or inaccessable)
 // recording sub name here to avoid modifying sub_list 
 // while iterating. 
@@ -64,7 +65,7 @@ var UPDATES = [
  * Sets up everything (Reddit API, Control API, Database)
  */
 function startup() {
-  var data = fs.readFileSync('settings.json', {encoding: 'utf8'});
+  var data = fs.readFileSync(path.join(__dirname, 'settings.json'), {encoding: 'utf8'});
   var settings = JSON.parse(data);
 
   SUBSCRIPTION_INTERVAL = settings.app.request_interval_ms;
@@ -245,7 +246,7 @@ function load_database() {
     var stmt = DB.prepare("INSERT INTO subs (name) VALUES (?)");
 
     var list = readline.createInterface({
-      input: fs.createReadStream('subs.txt')
+      input: fs.createReadStream(path.join(__dirname, 'subs.txt'))
     });
     
     list.on('line', (line) => {
